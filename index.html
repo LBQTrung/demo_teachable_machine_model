@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="./style.css">
+
+    <title>Demo Teachable Machine</title>
+</head>
+
+<body>
+    <div id="loading" style="display: none;">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+    </div>
+
+    <div class="app">
+        <h1 class="app-heading">Teachable Machine Model</h1>
+        <div class="input-wraper">
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+            <button id="file-button" onclick="chooseFile()">Choose File</button>
+            <button id="webcam-button" type="button" onclick="init()">Webcam</button>
+        </div>
+
+        <div id="image-result">
+            <img id="imagePreview" style="display: none; max-width: 300px; max-height: 300px; margin-top: 10px;"
+                alt="Preview Image">
+            <button id="classify-button" style="display: none;" onclick="classify()">Classify</button>
+            <div id="classify-label"></div>
+        </div>
+
+        <div id="webcam-result">
+            <div id="webcam-container"></div>
+            <div id="label-container"></div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+    <!-- Javascript for webcam -->
+    <script type="text/javascript">
+        // More API functions here:
+        // https://github.com/googlecreativelab/teachablemachine-community/tree/master/libraries/image
+
+        // the link to your model provided by Teachable Machine export panel
+        const URL = "your_teachable_machine_model_URL";
+        let model, webcam, labelContainer, maxPredictions;
+
+        let imageResult = document.getElementById('image-result')
+        let webcamResult = document.getElementById('webcam-result')
+
+        // Load the image model and setup the webcam
+        async function initModel() {
+            console.log('Loading AI model...')
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            // load the model and metadata
+            // Refer to tmImage.loadFromFiles() in the API to support files from a file picker
+            // or files from your local hard drive
+            // Note: the pose library adds "tmImage" object to your window (window.tmImage)
+            document.querySelector('.app').style.display = 'none'
+            document.getElementById('loading').style.display = 'flex'
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+            console.log('Load AI model successfully')
+
+            document.getElementById('loading').style.display = 'none'
+            document.querySelector('.app').style.display = 'flex'
+        }
+
+        async function init() {
+            imageResult.style.display = 'none'
+            classifyButton.style.display = 'none'
+            webcamResult.style.display = 'block'
+            if (!model) {
+                await initModel()
+            }
+
+            if (!webcam) {
+                document.querySelector('.app').style.display = 'none'
+                document.getElementById('loading').style.display = 'flex'
+                const flip = true; // whether to flip the webcam
+                webcam = new tmImage.Webcam(200, 200, flip); // width, height, flip
+                await webcam.setup(); // request access to the webcam
+                await webcam.play();
+                document.getElementById('loading').style.display = 'none'
+                document.querySelector('.app').style.display = 'flex'
+
+            } else {
+                await webcam.play()
+            }
+            // Convenience function to setup a webcam
+
+            window.requestAnimationFrame(loop);
+
+            // append elements to the DOM
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+            for (let i = 0; i < maxPredictions; i++) { // and class labels
+                labelContainer.appendChild(document.createElement("div"));
+            }
+        }
+
+        async function loop() {
+            webcam.update(); // update the webcam frame
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        // run the webcam image through the image model
+        async function predict() {
+            // predict can take in an image, video or canvas html element
+            const prediction = await model.predict(webcam.canvas);
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction =
+                    prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+            }
+        }
+    </script>
+
+    <!-- Javascript for file selection -->
+    <script type="text/javascript">
+        const fileInput = document.getElementById('fileInput')
+        const imagePreview = document.getElementById('imagePreview');
+        function chooseFile() {
+            webcamResult.style.display = 'none'
+            if (webcam) {
+                webcam.pause()
+            }
+            fileInput.click();
+        }
+        const classifyButton = document.getElementById('classify-button')
+
+        fileInput.addEventListener('change', function () {
+            imageResult.style.display = 'flex'
+
+            file = this.files[0];
+            if (file) {
+                var reader = new FileReader();
+                reader.onload = function (event) {
+                    imagePreview.src = event.target.result
+                    imagePreview.style.display = 'block'
+                };
+                reader.readAsDataURL(file);
+            }
+            classifyButton.style.display = 'block'
+            document.getElementById('classify-label').style.display = 'none'
+
+        });
+
+        async function classify() {
+            if (!model) {
+                await initModel()
+            }
+
+            const imagePredictions = await model.predict(imagePreview, false)
+            var maxProbability = 0;
+            var maxClassName = '';
+            imagePredictions.forEach(function (prediction) {
+                if (prediction.probability > maxProbability) {
+                    maxProbability = prediction.probability;
+                    maxClassName = prediction.className;
+                }
+            });
+
+            document.getElementById('classify-label').style.display = 'block'
+            document.getElementById('classify-label').innerHTML = `Label: <b>${maxClassName}</b>`
+        }
+    </script>
+
+</body>
+
+</html>
