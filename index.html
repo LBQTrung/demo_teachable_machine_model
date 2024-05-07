@@ -137,7 +137,10 @@
         function chooseFile() {
             webcamResult.style.display = 'none'
             if (webcam) {
-                webcam.pause()
+                webcam.stop()
+                webcam = undefined
+                document.getElementById("webcam-container").innerHTML = ''
+                document.getElementById("label-container").innerHTML = ''
             }
             fileInput.click();
         }
